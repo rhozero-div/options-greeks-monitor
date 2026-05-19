@@ -1,0 +1,38 @@
+{
+  "positions": [
+    {
+      "portfolio_id": "main",
+      "symbol": "QQQ",
+      "asset_type": "option",
+      "option_type": "put",
+      "strike": 435.0,
+      "expiration": "2026-12-31",
+      "quantity": 1,
+      "side": "short",
+      "entry_price": 10.66,
+      "entry_date": null,
+      "id": "example-001",
+      "status": "open",
+      "current_price": null,
+      "created_at": "2026-04-03 16:18:13.947608",
+      "updated_at": "2026-04-05 08:48:40.470355"
+    },
+    {
+      "portfolio_id": "main",
+      "symbol": "VOO",
+      "asset_type": "etf",
+      "option_type": null,
+      "strike": null,
+      "expiration": null,
+      "quantity": 100,
+      "side": "long",
+      "entry_price": 600.0,
+      "entry_date": null,
+      "id": "example-002",
+      "status": "open",
+      "current_price": null,
+      "created_at": "2026-04-07 21:56:30.554947",
+      "updated_at": "2026-04-07 21:56:30.554959"
+    }
+  ]
+}

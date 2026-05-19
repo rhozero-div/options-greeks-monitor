@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+.next/
+
+# Environment
+.env
+.venv/
+
+# Data
+backend/positions.json
+backend/portfolios.json
+backend/scenarios.json
+backend/daily_close_cache.json
+backend/iv_settings.json
+
+# Logs
+*.log
+
+# OS
+.DS_Store

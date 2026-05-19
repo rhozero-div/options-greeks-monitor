@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+venv/
+.venv/
+
+# Data files (personal positions, portfolios, scenarios — use .example templates)
+positions.json
+portfolios.json
+scenarios.json
+daily_close_cache.json
+iv_settings.json
+
+# Logs
+*.log
+launchd_*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store

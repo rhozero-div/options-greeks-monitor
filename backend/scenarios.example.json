@@ -1,0 +1,14 @@
+{
+  "scenarios": [
+    {
+      "id": "example-scenario-001",
+      "name": "Market down 10%",
+      "shifts": {
+        "QQQ": {"spot_chg": -0.1, "iv_chg": 0.2},
+        "SPY": {"spot_chg": -0.1, "iv_chg": 0.15}
+      },
+      "created_at": "2026-05-19T00:00:00",
+      "updated_at": "2026-05-19T00:00:00"
+    }
+  ]
+}

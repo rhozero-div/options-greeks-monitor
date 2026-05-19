@@ -1,0 +1,11 @@
+{
+  "portfolios": [
+    {
+      "id": "main",
+      "name": "main",
+      "color": "#808080",
+      "description": "Default portfolio"
+    }
+  ],
+  "default_id": "main"
+}

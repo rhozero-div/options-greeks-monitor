@@ -1,6 +1,10 @@
 MIT License
 
+<<<<<<< HEAD
 Copyright (c) 2026 melphis
+=======
+Copyright (c) 2026 yuanzhezhao
+>>>>>>> 0ef2790 (Initial release: Options Greeks Monitor v1.0.0)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
