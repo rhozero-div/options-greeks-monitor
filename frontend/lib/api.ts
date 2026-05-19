@@ -1,5 +1,5 @@
 const API_BASE = typeof window !== "undefined" && window.location.hostname === "localhost"
-  ? "http://localhost:8000/api/v1"
+  ? "http://localhost:8742/api/v1"
   : "/api/v1";
 
 export async function fetchPrices(): Promise<any> {

@@ -72,7 +72,7 @@ export default function Home() {
     if (typeof window === "undefined") return;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `ws://localhost:8000/ws/greeks`;
+    const wsUrl = `ws://localhost:8742/ws/greeks`;
 
     try {
       setWsStatus("connecting");

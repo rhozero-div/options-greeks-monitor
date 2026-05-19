@@ -1,17 +1,45 @@
 import yfinance as yf
 import json
+import time
+import asyncio
 from typing import Dict, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 SYMBOLS = ["VOO", "QQQ", "GLD", "USO", "TLT"]
 DEFAULT_RISK_FREE_RATE = 0.05
+ET = ZoneInfo("America/New_York")
+
+SEED_OVERRIDES = {
+    "QQQ": {
+        "2026-12-31": {
+            "435": {"call": 0.27, "put": 0.27},
+            "550": {"call": 0.33, "put": 0.33},
+        }
+    },
+    "GLD": {
+        "2027-01-15": {
+            "420": {"call": 0.30, "put": 0.30},
+        }
+    },
+    "USO": {
+        "2026-06-18": {
+            "85": {"call": 0.75, "put": 0.75},
+        }
+    },
+    "TLT": {
+        "2026-12-31": {
+            "100": {"call": 0.10, "put": 0.10},
+        }
+    },
+}
 
 
 class PriceService:
     def __init__(self, cache_file: str = "daily_close_cache.json"):
         self._data_dir = Path(__file__).parent
-        self._cache_file = self._data_dir / cache_file
+        self._cache_path = self._data_dir / cache_file
         self._prices: Dict[str, float] = {}
         self._dividend_yields: Dict[str, float] = {}
         self._irx_rate: Optional[float] = None
@@ -19,60 +47,32 @@ class PriceService:
         self._load_cache()
 
     def _load_cache(self):
-        if self._cache_file.exists():
+        if self._cache_path.exists():
             try:
-                data = json.loads(self._cache_file.read_text())
+                data = json.loads(self._cache_path.read_text())
                 self._cache_date = data.get("date")
-                today = datetime.now().date().isoformat()
-                if self._cache_date == today:
-                    self._prices = data.get("prices", {})
-                    self._dividend_yields = data.get("dividend_yields", {})
-                    self._irx_rate = data.get("irx_rate")
-                    print(f"Loaded cached daily close prices for {self._cache_date}")
-                else:
-                    print(f"Cache stale ({self._cache_date}), will fetch on first request")
-                    self._prices = {}
-                    self._cache_date = None
+                self._prices = data.get("prices", {})
+                self._dividend_yields = data.get("dividend_yields", {})
+                self._irx_rate = data.get("irx_rate")
             except Exception as e:
                 print(f"Failed to load price cache: {e}")
-                self._prices = {}
-                self._cache_date = None
 
     def _save_cache(self):
         data = {
-            "date": datetime.now().date().isoformat(),
+            "date": self._cache_date or datetime.now(ET).date().isoformat(),
             "prices": self._prices,
             "dividend_yields": self._dividend_yields,
             "irx_rate": self._irx_rate,
         }
-        self._cache_file.write_text(json.dumps(data, indent=2, default=str))
-        self._cache_date = datetime.now().date().isoformat()
+        self._cache_path.write_text(json.dumps(data, indent=2, default=str))
 
-    def _needs_daily_refresh(self) -> bool:
-        return self._cache_date != datetime.now().date().isoformat()
+    def _market_closed(self) -> bool:
+        now_et = datetime.now(ET)
+        return now_et.hour >= 16 or now_et.weekday() >= 5
 
-    def fetch_price(self, symbol: str) -> Optional[float]:
-        if symbol in self._prices and not self._needs_daily_refresh():
-            return self._prices[symbol]
-        try:
-            ticker = yf.Ticker(symbol)
-            info = ticker.fast_info
-            price = info.get("lastPrice")
-            if price and price > 0:
-                self._prices[symbol] = float(price)
-                self._save_cache()
-                return float(price)
-        except Exception as e:
-            print(f"Failed to fetch price for {symbol}: {e}")
-        return self._prices.get(symbol)
-
-    def fetch_all_prices(self) -> Dict[str, float]:
-        results = {}
-        for symbol in SYMBOLS:
-            price = self.fetch_price(symbol)
-            if price:
-                results[symbol] = price
-        return results
+    def _should_fetch(self) -> bool:
+        today = datetime.now(ET).date().isoformat()
+        return self._cache_date != today and self._market_closed()
 
     def get_cached_price(self, symbol: str) -> Optional[float]:
         return self._prices.get(symbol)
@@ -80,59 +80,110 @@ class PriceService:
     def get_all_cached_prices(self) -> Dict[str, float]:
         return {s: self._prices[s] for s in SYMBOLS if s in self._prices}
 
-    def get_last_update_time(self, symbol: str) -> Optional[str]:
-        return self._cache_date
+    def get_last_update_time(self, symbol: str) -> Optional[datetime]:
+        return None
 
-    def fetch_dividend_yield(self, symbol: str) -> Optional[float]:
-        if symbol in self._dividend_yields and not self._needs_daily_refresh():
-            return self._dividend_yields[symbol]
+    def _fetch_single_price(self, symbol: str) -> Optional[float]:
+        try:
+            ticker = yf.Ticker(symbol)
+            hist = ticker.history(period="1d")
+            if hist.empty:
+                return None
+            price = float(hist["Close"].iloc[-1])
+            return price if price > 0 else None
+        except Exception as e:
+            print(f"Failed to fetch price for {symbol}: {e}")
+            return None
+
+    def _fetch_single_dividend(self, symbol: str) -> Optional[float]:
         try:
             ticker = yf.Ticker(symbol)
             info = ticker.info
-            dividend_yield = info.get("dividendYield")
-            if dividend_yield is not None and dividend_yield > 0:
-                dividend_yield_decimal = float(dividend_yield) / 100.0
-                self._dividend_yields[symbol] = dividend_yield_decimal
-                return dividend_yield_decimal
+            if info is None:
+                return None
+            dy = info.get("dividendYield")
+            if dy is not None and dy > 0:
+                return float(dy) / 100.0
         except Exception as e:
             print(f"Failed to fetch dividend yield for {symbol}: {e}")
         return None
 
+    def _fetch_single_irx(self) -> Optional[float]:
+        try:
+            ticker = yf.Ticker("^IRX")
+            hist = ticker.history(period="5d")
+            if hist.empty:
+                return None
+            price = float(hist["Close"].iloc[-1])
+            return price / 100.0 if price > 0 else None
+        except Exception as e:
+            print(f"Failed to fetch risk-free rate: {e}")
+        return None
+
+    def _refresh_cache(self):
+        for symbol in SYMBOLS:
+            price = self._fetch_single_price(symbol)
+            if price is not None:
+                self._prices[symbol] = price
+            time.sleep(1)
+
+        for symbol in SYMBOLS:
+            if symbol not in self._dividend_yields:
+                dy = self._fetch_single_dividend(symbol)
+                if dy is not None:
+                    self._dividend_yields[symbol] = dy
+                time.sleep(0.5)
+
+        irx = self._fetch_single_irx()
+        if irx is not None:
+            self._irx_rate = irx
+
+        self._cache_date = datetime.now(ET).date().isoformat()
+        self._save_cache()
+
+    def fetch_price(self, symbol: str) -> Optional[float]:
+        if symbol in self._prices:
+            return self._prices[symbol]
+        if self._should_fetch():
+            self._refresh_cache()
+            return self._prices.get(symbol)
+        return None
+
+    def fetch_all_prices(self) -> Dict[str, float]:
+        if self._should_fetch():
+            self._refresh_cache()
+        elif not self._prices:
+            self._refresh_cache()
+        return dict(self._prices)
+
+    async def fetch_all_prices_async(self) -> Dict[str, float]:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self.fetch_all_prices)
+
     def get_dividend_yield(self, symbol: str) -> float:
         if symbol in self._dividend_yields:
             return self._dividend_yields[symbol]
-        yield_value = self.fetch_dividend_yield(symbol)
-        if yield_value is not None:
-            return yield_value
         return 0.0
 
     def get_all_dividend_yields(self) -> Dict[str, float]:
         return {s: self._dividend_yields.get(s, 0.0) for s in SYMBOLS}
 
+    def fetch_dividend_yield(self, symbol: str) -> Optional[float]:
+        if symbol in self._dividend_yields:
+            return self._dividend_yields[symbol]
+        return None
+
     def fetch_all_dividend_yields(self) -> Dict[str, float]:
-        for symbol in SYMBOLS:
-            self.fetch_dividend_yield(symbol)
         return self.get_all_dividend_yields()
 
     def fetch_risk_free_rate(self) -> Optional[float]:
-        if self._irx_rate is not None and not self._needs_daily_refresh():
+        if self._irx_rate is not None:
             return self._irx_rate
-        try:
-            ticker = yf.Ticker("^IRX")
-            info = ticker.info
-            rate = info.get("previousClose") or info.get("lastPrice")
-            if rate and rate > 0:
-                self._irx_rate = float(rate) / 100.0
-                self._save_cache()
-                return self._irx_rate
-        except Exception as e:
-            print(f"Failed to fetch risk-free rate from ^IRX: {e}")
         return None
 
     def get_risk_free_rate(self) -> float:
-        rate = self.fetch_risk_free_rate()
-        if rate is not None:
-            return rate
+        if self._irx_rate is not None:
+            return self._irx_rate
         try:
             return iv_store.get_risk_free_rate()
         except NameError:
