@@ -17,7 +17,7 @@ node_modules/
 backend/positions.json
 backend/portfolios.json
 backend/scenarios.json
-backend/daily_close_cache.json
+**/daily_close_cache.json
 backend/iv_settings.json
 
 # Logs
